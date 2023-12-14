@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, Text } from "react-native";
+import { View, StyleSheet, Text,TouchableOpacity } from "react-native";
 import { BarChart } from "react-native-chart-kit";
 
-const BarrChart = () => {
+
+const CandleChart = () => {
   const [cryptoData, setCryptoData] = useState([]);
+  const [tooltipData, setTooltipData] = useState(null);
   const [error, setError] = useState(null);
-  
+  const [tooltipVisible, setTooltipVisible] = useState(false);
   useEffect(() => {
     const fetchCryptoData = async () => {
       try {
@@ -27,7 +29,7 @@ const BarrChart = () => {
         setCryptoData(data);
       } catch (error) {
         console.error("Error fetching crypto data:", error);
-        setError("Error fetching crypto data. Please try again later.");
+        setError("    Error fetching crypto data. Please try again later.");
       }
     };
   
@@ -37,48 +39,53 @@ const BarrChart = () => {
   if (error) {
     return <Text style={styles.errorText}>{error}</Text>;
   }
-
   const chartData = {
     labels: cryptoData.map((crypto) => crypto.ath_date.split('T')[0].split('-')[2]),
     datasets: [
       {
-        data: cryptoData.map((crypto, index) => {
-          const waveAmplitude = 10; 
-          const waveFrequency = 2 * Math.PI / cryptoData.length;
-          const sineWaveValue = waveAmplitude * Math.sin(waveFrequency * index);
-
-          return crypto.market_cap_rank + sineWaveValue;
-        }),
+        data: cryptoData.map((crypto) => crypto.market_cap_change_24h),
       },
     ],
   };
+  const handleTooltipPress = (value) => {
+    setTooltipData({ value });
+    setTooltipVisible(true);
+  };
+
+  const handleChartPress = () => {
+    setTooltipVisible(false);
+  };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>BTC current price: <Text style={{fontWeight:'bold',fontSize:26}}>$ 42,544,566</Text></Text>
+    <TouchableOpacity activeOpacity={1} onPress={handleChartPress} style={styles.container}>
+      <Text style={styles.header}>BTC 24h volume: <Text style={{fontWeight:'bold',fontSize:26}}>$ {cryptoData[0]?.total_volume}</Text></Text>
       <View style={styles.chartContainer}>
         <BarChart
           data={chartData}
           width={350}
-          height={200}
+          height={175}
           yAxisLabel="USD"
           chartConfig={{
             backgroundGradientFrom: "black",
             backgroundGradientTo: "black",
             decimalPlaces: 2,
-            color: (opacity = 1) => `rgba(26, 255, 146, ${opacity})`,
+            color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
             style: {
               borderRadius: 16,
             },
           }}
-          style={{
-            marginVertical: 8,
-            borderRadius: 16,
-          }}
+          style={{ marginVertical: 8, borderRadius: 16 }}
+          onDataPointPress={({ value }) => handleTooltipPress(value)}
         />
+        {tooltipVisible && tooltipData && (
+          <View style={styles.tooltipContainer}>
+            <Text style={styles.tooltipText}>{`Value: $${tooltipData.value}`}</Text>
+          </View>
+        )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
+  
 };
 
 const styles = StyleSheet.create({
@@ -86,17 +93,29 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 10,
     backgroundColor: "#2a2c30",
+    
   },
   header: {
     fontWeight: "bold",
     fontSize: 20,
     textAlign: "center",
     paddingBottom: 10,
-    color:"#d9dadb"
+    color: "#d9dadb",
   },
   chartContainer: {
     alignItems: "center",
+    overflow:"scroll"
   },
+  tooltipContainer: {
+    position: "absolute",
+    backgroundColor: "white",
+    padding: 8,
+    borderRadius: 8,
+  },
+  tooltipText: {
+    fontSize: 14,
+  },
+  
 });
 
-export default BarrChart;
+export default CandleChart;

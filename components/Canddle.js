@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, Button, ActivityIndicator, ScrollView, Image } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Button, ActivityIndicator, ScrollView, Image, ProgressBarAndroidBase, ProgressBarAndroid } from 'react-native';
 
 const PAGE_SIZE = 20;
+
 
 const CryptoTable = () => {
   const [cryptoData, setCryptoData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -15,23 +17,35 @@ const CryptoTable = () => {
           `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${PAGE_SIZE}&page=${page}&sparkline=true&price_change_percentage=1h,24h,7d`
         );
 
+        if (!response.ok) {
+          
+            
+            throw new Error('Failed to fetch data. Please check your network connection.');
+          
+        }
+
         const data = await response.json();
 
         if (page === 1) {
-          setCryptoData(data);
+          if (Array.isArray(data)) {
+            setCryptoData([...data]);
+          } else {
+            console.error('Invalid data structure:', data);
+          }
         } else {
           setCryptoData((prevData) => [...prevData, ...data]);
         }
 
         setLoading(false);
       } catch (error) {
-        console.error('Error fetching crypto data:', error);
+        console.error('Error fetching crypto data:', error.message);
+        setError(error.message);
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [page]);
+  }, []);
 
   const getColorAndSymbol = (percentage) => {
     const color = percentage < 1 ? 'red' : 'green';
@@ -50,18 +64,45 @@ const CryptoTable = () => {
       item.price_change_percentage_7d_in_currency
     );
 
-    const formatPrice = (price) => parseFloat(price).toFixed(2);
+    const formatPrice = (price) => parseFloat(price).toFixed(3);
 
     return (
       <View style={styles.row} key={item.id || index.toString()}>
-        
-        <Text style={styles.cell}> <Image source={{ uri: item.image }} style={styles.image} />{item.name}</Text>
+      < View style={[styles.cell,{display:'flex',flexDirection:'row',gap:10}]}>
+          <Image source={{ uri: item.image }} style={[styles.image,{padding:10}]} />
+        <Text style={{color:'white'}} >
+             {item.name}
+        </Text>
+      </View>
         <Text style={styles.cell}>{formatPrice(item.current_price)}</Text>
         <Text style={[styles.cell, { color: color1h }]}>{`${symbol1h} ${item.price_change_percentage_1h_in_currency.toFixed(2)}%`}</Text>
         <Text style={[styles.cell, { color: color24h }]}>{`${symbol24h} ${item.price_change_percentage_24h_in_currency.toFixed(2)}%`}</Text>
         <Text style={[styles.cell, { color: color7d }]}>{`${symbol7d} ${item.price_change_percentage_7d_in_currency.toFixed(2)}%`}</Text>
-        <Text style={styles.cell}>{formatPrice(item.total_volume)}</Text>
-        <Text style={styles.cell}>{item.total_supply}</Text>
+       
+        <View style={styles.cell}>
+        <View style={{display:'flex', flexDirection:'row',justifyContent:'space-between'}}>
+    <Text style={{color:'white'}}>{item.atl.toFixed(2)}B</Text>
+    <Text style={{color:'white'}}>{item.price_change_24h.toFixed(2)}B</Text>
+    </View>
+    <ProgressBarAndroid
+      styleAttr="Horizontal"
+      color='darkgrey'
+      indeterminate={false}
+      progress={item.atl}
+    />
+  </View>
+  <View style={styles.cell}>
+        <View style={{display:'flex', flexDirection:'row',justifyContent:'space-between'}}>
+    <Text style={{color:'white'}}>{item.price_change_24h.toFixed(2)}M</Text>
+    <Text style={{color:'white'}}>{item.high_24h.toFixed(2)}M</Text>
+    </View>
+    <ProgressBarAndroid
+      styleAttr="Horizontal"
+      color='darkgrey'
+      indeterminate={false}
+      progress={item.atl}
+    />
+  </View>
       </View>
     );
   };
@@ -74,7 +115,7 @@ const CryptoTable = () => {
     <ScrollView horizontal>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text  style={styles.headerCell}>Name</Text>
+          <Text style={styles.headerCell}>Name</Text>
           <Text style={styles.headerCell}>Price</Text>
           <Text style={styles.headerCell}>1h%</Text>
           <Text style={styles.headerCell}>24h%</Text>
@@ -82,17 +123,21 @@ const CryptoTable = () => {
           <Text style={styles.headerCell}>24h Volume</Text>
           <Text style={styles.headerCell}>Total Supply</Text>
         </View>
-        <FlatList
-          data={cryptoData}
-          keyExtractor={(item, index) => item.id || index.toString()}
-          renderItem={renderCryptoItem}
-          ListFooterComponent={() =>
-            loading ? <ActivityIndicator size="large" color="#03AE9D" /> : null
-          }
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.1}
-        />
-        {!loading && (
+        {error ? (
+          <Text style={styles.errorText}>{error}</Text>
+        ) : (
+          <FlatList
+            data={cryptoData}
+            keyExtractor={(item, index) => item.id || index.toString()}
+            renderItem={renderCryptoItem}
+            ListFooterComponent={() =>
+              loading ? <ActivityIndicator size="large" color="#03AE9D" /> : null
+            }
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.1}
+          />
+        )}
+        {!loading && !error && (
           <Button title="Load More" onPress={handleLoadMore} disabled={loading} />
         )}
       </View>
@@ -108,38 +153,43 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-   
   },
   cell: {
     flex: 1,
-    textAlign: 'start',
-    padding: 5,
-    color:'white',
+    textAlign: 'left',
+    gap:4,
+    padding: 15,
+    color: 'white',
     borderWidth: 1,
-    backgroundColor: '#191B1F', 
-    height: 50,
-    width: 150,
+    backgroundColor: '#191B1F',
+    height: 70,
+    width: 200,
   },
   headerCell: {
     flex: 1,
-    textAlign: 'center',
+    textAlign: 'left',
     fontWeight: 'bold',
-    padding: 5,
-    backgroundColor: '#191B1F', 
+    padding: 15,
+    backgroundColor: '#191B1F',
     borderWidth: 1,
     height: 50,
-    color:'white',
+    color: 'white',
     width: 100,
   },
   image: {
     width: 20,
     height: 20,
     borderRadius: 10,
+  },
+  errorText: {
+    color: 'red',
+    textAlign: 'center',
+    marginTop: 10,
+    fontSize: 16,
   },
 });
 
